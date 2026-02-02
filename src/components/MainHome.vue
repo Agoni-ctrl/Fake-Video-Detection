@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-// 1. 导入useRouter 【新增】
-// import { useRouter } from 'vue-router'
+import { useRouter } from 'vue-router' // 导入 useRouter
 
 defineProps({
   title: {
@@ -10,17 +9,14 @@ defineProps({
   }
 })
 
-
-// const router = useRouter()
-
-// 导航激活项Ref，控制点击切换选中状态，默认选中「首页」
+const router = useRouter() // 获取路由实例
 const activeNav = ref('首页')
+
 const handleNavClick = (navName) => {
   activeNav.value = navName
   console.log(`点击了导航：${navName}`)
 }
 
-// 搜索按钮点击事件
 const handleSearch = () => {
   const searchVal = document.querySelector('.search-input').value
   if (searchVal) {
@@ -30,10 +26,11 @@ const handleSearch = () => {
   }
 }
 
-// 3. 登录/注册点击事件 【修改：替换alert为路由跳转】
+// 修改登录点击事件，使用路由跳转
 const handleLogin = () => {
-  //  router.replace({ name: 'Login' }) 
-   alert("成功")
+  router.push('/login') // 跳转到登录页面
+  // 或者使用命名路由：
+  // router.push({ name: 'Login' })
 }
 </script>
 
