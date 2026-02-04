@@ -1,5 +1,7 @@
 <script setup>
 import MainHome from './components/MainHome.vue';
+import Header from './components/Header.vue';
+// import Login from './components/Login.vue';
 
 import { useRoute } from 'vue-router';
 
@@ -9,7 +11,7 @@ const currentRoute = useRoute();
 </script>
 
 <template>
-    <MainHome v-if="currentRoute.path !== '/login'" />
+    <Header v-if="currentRoute.path !== '/login'"></Header>
     <router-view />
 </template>
 

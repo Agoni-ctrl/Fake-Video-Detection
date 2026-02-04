@@ -1,12 +1,60 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- FontAwesome 图标CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas CDN（截图用） -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- jsPDF CDN（PDF导出用） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>fake-video-detection</title>
+    <!-- Tailwind 配置：配色+自定义工具类（和检测页面样式完全对齐） -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#409EFF',
+              success: '#67C23A',
+              danger: '#F56C6C',
+              light: '#E5EAF3',
+              dark: '#606266',
+            },
+          }
+        }
+      }
+    </script>
+    <style type="text/tailwindcss">
+      @layer utilities {
+        .content-auto {
+          content-visibility: auto;
+        }
+        /* 置信度圆环 */
+        .progress-ring {
+          transform: rotate(-90deg);
+          transform-origin: 50% 50%;
+        }
+        /* 拖拽上传激活态 */
+        .dropzone-active {
+          @apply border-primary bg-primary/5;
+        }
+        /* 淡入动画 */
+        .fade-in {
+          animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      }
+    </style>
   </head>
-  <body>
+  <body class="m-0 p-0">
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

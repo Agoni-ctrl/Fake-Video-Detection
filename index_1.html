@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>内容检测系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#409EFF',
+            success: '#67C23A',
+            danger: '#F56C6C',
+            light: '#E5EAF3',
+            dark: '#606266',
+          },
+        },
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .progress-ring {
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+      }
+      .dropzone-active {
+        @apply border-primary bg-primary/5;
+      }
+      .fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="flex gap-8 max-w-7xl mx-auto">
+    <!-- 左侧：上传与检测控制台 -->
+    <div class="bg-white rounded-lg shadow-sm p-6 w-[40%]">
+      <div class="flex items-center gap-2 mb-6">
+        <div class="w-3 h-3 rounded bg-primary"></div>
+        <h2 class="text-lg font-semibold text-gray-800">检测控制台</h2>
+      </div>
+
+      <!-- 1. 选择检测类型 -->
+      <div class="mb-4">
+        <label class="block text-sm text-gray-500 mb-1">选择你要检测的对象</label>
+        <div class="relative">
+          <select class="w-full px-3 py-2 border border-light rounded-md appearance-none focus:outline-none focus:ring-1 focus:ring-primary/30">
+            <option>图片</option>
+            <option>视频</option>
+          </select>
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <i class="fa fa-chevron-down text-xs"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 拖拽上传区域 -->
+      <div class="border-2 border-dashed border-light rounded-lg p-6 text-center mb-4 hover:border-primary transition-colors" id="dropzone">
+        <i class="fa fa-cloud-upload text-xl text-gray-400 mb-2"></i>
+        <p class="text-sm text-gray-500 mb-1">点击或拖拽文件到此处上传</p>
+        <p class="text-xs text-gray-400">支持 JPG/PNG/MP4 等格式，最大 10MB</p>
+        <input type="file" class="hidden" id="fileInput" accept="image/*,video/*">
+      </div>
+
+      <!-- 3. 上传预览 -->
+      <div class="border border-light rounded-lg p-3 mb-4 hidden" id="previewContainer">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs text-gray-500">已上传文件</span>
+          <button class="text-xs text-gray-400 hover:text-danger" id="removePreview">
+            <i class="fa fa-times"></i>
+          </button>
+        </div>
+        <div class="flex justify-center" id="previewContent">
+          <!-- 预览内容将通过JS动态插入 -->
+        </div>
+      </div>
+
+      <!-- 4. 开始检测按钮 -->
+      <button class="w-full py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" id="startBtn" disabled>
+        <i class="fa fa-play-circle mr-1"></i> 开始检测
+      </button>
+    </div>
+
+    <!-- 右侧：可视化检测结果仪表盘 -->
+    <div class="bg-white rounded-lg shadow-sm p-6 w-[60%]">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded bg-primary"></div>
+            <h2 class="text-xl font-semibold text-gray-800">检测结果</h2>
+          </div>
+          <div class="text-xs text-gray-400 mt-1">
+            <span class="mr-2"><i class="fa fa-clock-o mr-1"></i> <span id="currentTime">--:--:--</span></span>
+            <span><i class="fa fa-file-image-o mr-1"></i> <span id="detectType">未选择</span></span>
+          </div>
+        </div>
+        <button class="px-3 py-1 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors text-sm" id="exportBtn" disabled>
+          <i class="fa fa-download mr-1"></i> 导出报告
+        </button>
+      </div>
+
+      <!-- 默认空状态（带填充内容） -->
+      <div id="emptyState" class="fade-in">
+        <div class="flex flex-col items-center justify-center py-8 text-center mb-8">
+          <i class="fa fa-file-image-o text-4xl text-gray-300 mb-4"></i>
+          <p class="text-gray-500 mb-2">请上传文件并开始检测</p>
+          <p class="text-xs text-gray-400">支持图片和视频格式，最大10MB</p>
+        </div>
+
+        <!-- 空状态填充内容 -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa fa-lightbulb-o text-primary"></i>
+              <h4 class="text-sm font-medium text-gray-800">功能特点</h4>
+            </div>
+            <ul class="text-xs text-gray-600 space-y-1">
+              <li><i class="fa fa-check text-success mr-1"></i> 支持图片与视频检测</li>
+              <li><i class="fa fa-check text-success mr-1"></i> AI算法精准识别伪造内容</li>
+              <li><i class="fa fa-check text-success mr-1"></i> 生成详细检测报告</li>
+              <li><i class="fa fa-check text-success mr-1"></i> 支持PDF报告导出</li>
+            </ul>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa fa-list-ol text-primary"></i>
+              <h4 class="text-sm font-medium text-gray-800">使用步骤</h4>
+            </div>
+            <ol class="text-xs text-gray-600 space-y-1 list-decimal pl-4">
+              <li>选择检测类型（图片/视频）</li>
+              <li>点击或拖拽上传文件</li>
+              <li>点击「开始检测」按钮</li>
+              <li>查看检测结果并导出报告</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <i class="fa fa-info-circle text-primary"></i>
+            <h4 class="text-sm font-medium text-gray-800">系统说明</h4>
+          </div>
+          <p class="text-xs text-gray-600">
+            本系统采用先进的AI检测算法，能够识别图片和视频中的伪造痕迹，包括AI生成、图像篡改等。检测结果仅供参考，如有疑问请通过质疑通道提交反馈。
+          </p>
+        </div>
+      </div>
+
+      <!-- 检测结果区域（默认隐藏） -->
+      <div id="resultContainer" class="hidden fade-in">
+        <!-- 核心结论区 -->
+        <div id="conclusionCard" class="bg-gradient-to-r from-success/10 to-primary/10 rounded-xl p-6 mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-500 mb-1">最终判定</p>
+              <div class="flex items-center gap-2">
+                <i id="conclusionIcon" class="fa fa-check-circle text-2xl text-success"></i>
+                <h3 id="conclusionText" class="text-xl font-bold text-gray-800">真实图片</h3>
+              </div>
+            </div>
+            <div class="relative w-24 h-24">
+              <svg class="w-full h-full" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#E5EAF3" stroke-width="8" />
+                <circle id="confidenceRing" cx="50" cy="50" r="45" fill="none" stroke="#67C23A" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="1.13" class="progress-ring" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span id="confidenceValue" class="text-2xl font-bold text-gray-800">99.66%</span>
+                <span class="text-xs text-gray-500">可信度</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 关键指标卡片 -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa fa-code text-primary"></i>
+              <span class="text-xs text-gray-500">模型原始得分</span>
+            </div>
+            <p id="logitsValue" class="text-lg font-semibold text-gray-800">-5.6823</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa fa-check-circle text-success"></i>
+              <span class="text-xs text-gray-500">真实图片概率</span>
+            </div>
+            <p id="realProb" class="text-lg font-semibold text-success">99.66%</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa fa-exclamation-circle text-danger"></i>
+              <span class="text-xs text-gray-500">伪造图片概率</span>
+            </div>
+            <p id="fakeProb" class="text-lg font-semibold text-danger">0.34%</p>
+          </div>
+        </div>
+
+        <!-- 图片信息与分析详情 -->
+        <div class="grid grid-cols-2 gap-6">
+          <div>
+            <h4 class="text-sm font-medium text-gray-800 mb-3 flex items-center gap-1">
+              <i class="fa fa-image text-primary"></i> 图片信息
+            </h4>
+            <div class="bg-gray-50 rounded-lg p-4">
+              <div class="text-xs text-gray-500 space-y-1">
+                <p><span class="font-medium">文件名称:</span> <span id="fileName">--</span></p>
+                <p><span class="font-medium">文件大小:</span> <span id="fileSize">--</span></p>
+                <p><span class="font-medium">图片格式:</span> <span id="fileType">--</span></p>
+                <p><span class="font-medium">分辨率:</span> <span id="fileResolution">--</span></p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-sm font-medium text-gray-800 mb-3 flex items-center gap-1">
+              <i class="fa fa-search text-primary"></i> 分析详情
+            </h4>
+            <div id="analysisDetails" class="bg-gray-50 rounded-lg p-4 space-y-2">
+              <div class="flex items-start gap-2">
+                <i class="fa fa-check text-success mt-0.5"></i>
+                <p class="text-xs text-gray-600">像素分布符合自然图片特征，无AI生成痕迹</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <i class="fa fa-check text-success mt-0.5"></i>
+                <p class="text-xs text-gray-600">EXIF信息完整，未发现篡改痕迹</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <i class="fa fa-check text-success mt-0.5"></i>
+                <p class="text-xs text-gray-600">边缘过渡自然，无算法生成的伪影</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <i class="fa fa-check text-success mt-0.5"></i>
+                <p class="text-xs text-gray-600">光照与阴影逻辑一致，符合真实场景</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM元素
+    const { jsPDF } = window.jspdf;
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewContent = document.getElementById('previewContent');
+    const removePreview = document.getElementById('removePreview');
+    const startBtn = document.getElementById('startBtn');
+    const emptyState = document.getElementById('emptyState');
+    const resultContainer = document.getElementById('resultContainer');
+    const exportBtn = document.getElementById('exportBtn');
+    const currentTime = document.getElementById('currentTime');
+    const detectType = document.getElementById('detectType');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileType = document.getElementById('fileType');
+    const fileResolution = document.getElementById('fileResolution');
+    // 结果动态元素
+    const conclusionCard = document.getElementById('conclusionCard');
+    const conclusionIcon = document.getElementById('conclusionIcon');
+    const conclusionText = document.getElementById('conclusionText');
+    const confidenceRing = document.getElementById('confidenceRing');
+    const confidenceValue = document.getElementById('confidenceValue');
+    const logitsValue = document.getElementById('logitsValue');
+    const realProb = document.getElementById('realProb');
+    const fakeProb = document.getElementById('fakeProb');
+    const analysisDetails = document.getElementById('analysisDetails');
+
+    // 实时更新时间
+    function updateTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      currentTime.textContent = timeStr;
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // 上传区域交互
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // 拖拽上传
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dropzone-active');
+    });
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dropzone-active');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dropzone-active');
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // 文件选择
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    // 移除预览
+    removePreview.addEventListener('click', () => {
+      previewContainer.classList.add('hidden');
+      previewContent.innerHTML = '';
+      startBtn.disabled = true;
+      fileInput.value = '';
+      resetResult();
+    });
+
+    // 重置结果区域
+    function resetResult() {
+      emptyState.classList.remove('hidden');
+      resultContainer.classList.add('hidden');
+      exportBtn.disabled = true;
+      startBtn.innerHTML = '<i class="fa fa-play-circle mr-1"></i> 开始检测';
+      startBtn.classList.remove('bg-success', 'bg-danger');
+      startBtn.classList.add('bg-primary');
+    }
+
+    // 处理文件
+    function handleFile(file) {
+      resetResult();
+      previewContent.innerHTML = '';
+      detectType.textContent = file.type.startsWith('image/') ? '图片检测' : '视频检测';
+      
+      if (file.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.className = 'rounded-md max-h-48 object-cover';
+        previewContent.appendChild(img);
+
+        // 读取图片分辨率
+        img.onload = () => {
+          fileResolution.textContent = `${img.width} × ${img.height}`;
+        };
+      } else if (file.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+        video.className = 'rounded-md max-h-48 object-cover';
+        video.controls = true;
+        previewContent.appendChild(video);
+        fileResolution.textContent = '视频分辨率';
+      }
+
+      // 保存文件信息
+      fileName.textContent = file.name;
+      fileSize.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+      fileType.textContent = file.type.split('/')[1].toUpperCase();
+
+      previewContainer.classList.remove('hidden');
+      startBtn.disabled = false;
+    }
+
+    // 模拟检测动画与结果切换
+    startBtn.addEventListener('click', () => {
+      startBtn.disabled = true;
+      startBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> 检测中...';
+      
+      // 随机生成检测结果（50%概率真实，50%概率伪造）
+      const isReal = Math.random() > 0.5;
+      
+      // 模拟3秒检测过程
+      setTimeout(() => {
+        emptyState.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+        exportBtn.disabled = false;
+        
+        if (isReal) {
+          // 真实图片结果
+          conclusionCard.className = 'bg-gradient-to-r from-success/10 to-primary/10 rounded-xl p-6 mb-6';
+          conclusionIcon.className = 'fa fa-check-circle text-2xl text-success';
+          conclusionText.textContent = '真实图片';
+          confidenceRing.setAttribute('stroke', '#67C23A');
+          confidenceRing.setAttribute('stroke-dashoffset', '1.13');
+          confidenceValue.textContent = '99.66%';
+          logitsValue.textContent = '-5.6823';
+          realProb.textContent = '99.66%';
+          fakeProb.textContent = '0.34%';
+          analysisDetails.innerHTML = `
+            <div class="flex items-start gap-2">
+              <i class="fa fa-check text-success mt-0.5"></i>
+              <p class="text-xs text-gray-600">像素分布符合自然图片特征，无AI生成痕迹</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-check text-success mt-0.5"></i>
+              <p class="text-xs text-gray-600">EXIF信息完整，未发现篡改痕迹</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-check text-success mt-0.5"></i>
+              <p class="text-xs text-gray-600">边缘过渡自然，无算法生成的伪影</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-check text-success mt-0.5"></i>
+              <p class="text-xs text-gray-600">光照与阴影逻辑一致，符合真实场景</p>
+            </div>
+          `;
+          startBtn.innerHTML = '<i class="fa fa-check-circle mr-1"></i> 检测完成';
+          startBtn.classList.remove('bg-primary');
+          startBtn.classList.add('bg-success');
+        } else {
+          // 伪造图片结果
+          conclusionCard.className = 'bg-gradient-to-r from-danger/10 to-primary/10 rounded-xl p-6 mb-6';
+          conclusionIcon.className = 'fa fa-times-circle text-2xl text-danger';
+          conclusionText.textContent = '伪造图片';
+          confidenceRing.setAttribute('stroke', '#F56C6C');
+          confidenceRing.setAttribute('stroke-dashoffset', '280');
+          confidenceValue.textContent = '98.21%';
+          logitsValue.textContent = '6.3217';
+          realProb.textContent = '1.79%';
+          fakeProb.textContent = '98.21%';
+          analysisDetails.innerHTML = `
+            <div class="flex items-start gap-2">
+              <i class="fa fa-times text-danger mt-0.5"></i>
+              <p class="text-xs text-gray-600">像素分布存在AI生成特征，边缘过渡不自然</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-times text-danger mt-0.5"></i>
+              <p class="text-xs text-gray-600">EXIF信息存在篡改痕迹，文件元数据异常</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-times text-danger mt-0.5"></i>
+              <p class="text-xs text-gray-600">局部区域发现算法生成的伪影和纹理重复</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <i class="fa fa-times text-danger mt-0.5"></i>
+              <p class="text-xs text-gray-600">光照与阴影逻辑矛盾，不符合真实物理规律</p>
+            </div>
+          `;
+          startBtn.innerHTML = '<i class="fa fa-check-circle mr-1"></i> 检测完成';
+          startBtn.classList.remove('bg-primary');
+          startBtn.classList.add('bg-danger');
+        }
+      }, 3000);
+    });
+
+    // 导出报告功能
+    exportBtn.addEventListener('click', async () => {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const resultElement = document.getElementById('resultContainer');
+      
+      // 生成截图
+      const canvas = await html2canvas(resultElement, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      
+      // 添加到PDF
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      if (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        doc.addPage();
+        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      }
+      
+      // 保存PDF
+      doc.save(`检测报告_${new Date().getTime()}.pdf`);
+    });
+  </script>
+</body>
+</html>
