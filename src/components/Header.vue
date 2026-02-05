@@ -19,6 +19,9 @@ const handleNavClick = (navName) => {
     router.push('./detect')
     // alert('跳转成功')
   }
+  if (navName=="首页"){
+    router.push('./mainhome')
+  }
 
 }
 
